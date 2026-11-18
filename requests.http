@@ -1,0 +1,187 @@
+### Hospital Records sample requests (IntelliJ HTTP client or VS Code "REST Client" extension)
+### Run the logins first, then paste each token into the variables below.
+### All demo data is fictional. Demo passwords: admin = Admin@12345, everyone else = Password@123
+
+@host = http://localhost:8080
+@admin = PASTE_ADMIN_TOKEN
+@reception = PASTE_RECEPTIONIST_TOKEN
+@doctor = PASTE_DOCTOR_TOKEN
+@nurse = PASTE_NURSE_TOKEN
+
+### Login: admin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "admin@hospital.test", "password": "Admin@12345" }
+
+### Login: receptionist
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "reception@hospital.test", "password": "Password@123" }
+
+### Login: doctor (Dr. Rao)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "dr.rao@hospital.test", "password": "Password@123" }
+
+### Login: nurse
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "nurse.priya@hospital.test", "password": "Password@123" }
+
+### Admin: create a staff account
+POST {{host}}/api/admin/staff
+Authorization: Bearer {{admin}}
+Content-Type: application/json
+
+{
+  "email": "dr.khan@hospital.test",
+  "password": "Password@123",
+  "fullName": "Dr. Imran Khan",
+  "role": "DOCTOR",
+  "specialization": "Orthopaedics"
+}
+
+### Admin: list doctors
+GET {{host}}/api/admin/staff?role=DOCTOR
+Authorization: Bearer {{admin}}
+
+### Receptionist: register a patient
+POST {{host}}/api/patients
+Authorization: Bearer {{reception}}
+Content-Type: application/json
+
+{
+  "fullName": "Lakshmi Pillai",
+  "dateOfBirth": "1992-09-30",
+  "gender": "FEMALE",
+  "phone": "9000000010",
+  "bloodGroup": "AB+",
+  "emergencyContactName": "Suresh Pillai",
+  "emergencyContactPhone": "9000000011"
+}
+
+### Receptionist: search patients
+GET {{host}}/api/patients?q=asha
+Authorization: Bearer {{reception}}
+
+### Receptionist: see doctors
+GET {{host}}/api/doctors
+Authorization: Bearer {{reception}}
+
+### Receptionist: book an appointment (change the date to a future one)
+POST {{host}}/api/appointments
+Authorization: Bearer {{reception}}
+Content-Type: application/json
+
+{
+  "patientId": 2,
+  "doctorId": 2,
+  "startTime": "2026-12-01T11:00:00",
+  "durationMinutes": 30,
+  "reason": "Chest pain follow-up"
+}
+
+### Receptionist: the same slot again returns 409 Conflict
+POST {{host}}/api/appointments
+Authorization: Bearer {{reception}}
+Content-Type: application/json
+
+{
+  "patientId": 3,
+  "doctorId": 2,
+  "startTime": "2026-12-01T11:15:00",
+  "durationMinutes": 30
+}
+
+### Doctor: my schedule (doctors only ever see their own)
+GET {{host}}/api/appointments
+Authorization: Bearer {{doctor}}
+
+### Doctor: create a clinical record (patient 1 = Asha, who has an appointment with Dr. Rao)
+POST {{host}}/api/patients/1/records
+Authorization: Bearer {{doctor}}
+Content-Type: application/json
+
+{
+  "diagnosis": "Mild hypertension",
+  "treatment": "Lifestyle changes",
+  "prescription": "Amlodipine 5 mg once daily",
+  "notes": "Review in 4 weeks"
+}
+
+### Receptionist: reading the record is forbidden (403)
+GET {{host}}/api/records/1
+Authorization: Bearer {{reception}}
+
+### Nurse: read-only access
+GET {{host}}/api/records/1
+Authorization: Bearer {{nurse}}
+
+### Doctor: edit the record (a reason is required, the old version is kept)
+PUT {{host}}/api/records/1
+Authorization: Bearer {{doctor}}
+Content-Type: application/json
+
+{
+  "diagnosis": "Hypertension stage 1",
+  "treatment": "Medication started",
+  "prescription": "Amlodipine 5 mg once daily",
+  "notes": "BP still elevated at review",
+  "changeReason": "Follow-up reading was higher"
+}
+
+### Version history of the record
+GET {{host}}/api/records/1/history
+Authorization: Bearer {{doctor}}
+
+### Doctor: complete an appointment
+POST {{host}}/api/appointments/1/complete
+Authorization: Bearer {{doctor}}
+
+### Admin: audit trail for one record
+GET {{host}}/api/admin/audit?entityType=MedicalRecord&entityId=1
+Authorization: Bearer {{admin}}
+
+### Admin: failed login attempts
+GET {{host}}/api/admin/audit?action=LOGIN_FAILED
+Authorization: Bearer {{admin}}
+
+### Admin: deactivate a patient (hides from search, blocks new bookings)
+PATCH {{host}}/api/patients/3/active
+Authorization: Bearer {{admin}}
+Content-Type: application/json
+
+{ "active": false }
+
+
+### Patient: create their own login (MRN + date of birth of an existing patient without a login, e.g. one registered above)
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{ "email": "new.patient@example.test", "password": "Password@123", "mrn": "MRN-XXXXXXXX", "dateOfBirth": "1990-05-17" }
+
+### Patient: log in (demo patient Asha Verma)
+# @name patientLogin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "asha.verma@patient.test", "password": "Password@123" }
+
+### Patient: my appointments
+GET {{host}}/api/me/appointments
+Authorization: Bearer {{patientLogin.response.body.token}}
+
+### Patient: book for myself (change the date to a future day)
+POST {{host}}/api/me/appointments
+Authorization: Bearer {{patientLogin.response.body.token}}
+Content-Type: application/json
+
+{ "doctorId": 2, "startTime": "2026-12-01T11:00:00", "reason": "Follow-up" }
+
+### Patient: clinical records are not available to patients (403)
+GET {{host}}/api/patients/1/records
+Authorization: Bearer {{patientLogin.response.body.token}}
